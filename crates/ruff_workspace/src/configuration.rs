@@ -433,15 +433,6 @@ impl Configuration {
         };
 
         #[allow(deprecated)]
-        if options.tab_size.is_some() {
-            let config_to_update = path.map_or_else(
-                || String::from("your `--config` CLI arguments"),
-                |path| format!("`{}`", fs::relativize_path(path)),
-            );
-            return Err(anyhow!("The `tab-size` option has been renamed to `indent-width` to emphasize that it configures the indentation used by the formatter as well as the tab width. Please update {config_to_update} to use `indent-width = <value>` instead."));
-        }
-
-        #[allow(deprecated)]
         if options.output_format == Some(OutputFormat::Text) {
             let config_to_update = path.map_or_else(
                 || String::from("your `--config` CLI arguments"),
