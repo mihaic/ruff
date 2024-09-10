@@ -40,7 +40,9 @@ use ruff_text_size::Ranged;
 use crate::module_name::ModuleName;
 use crate::module_resolver::{file_to_module, resolve_module};
 use crate::semantic_index::ast_ids::{HasScopedAstId, HasScopedUseId, ScopedExpressionId};
-use crate::semantic_index::definition::{Definition, DefinitionKind, DefinitionNodeKey};
+use crate::semantic_index::definition::{
+    AssignmentKind, Definition, DefinitionKind, DefinitionNodeKey,
+};
 use crate::semantic_index::expression::Expression;
 use crate::semantic_index::semantic_index;
 use crate::semantic_index::symbol::{NodeWithScopeKind, NodeWithScopeRef, ScopeId};
@@ -380,6 +382,7 @@ impl<'db> TypeInferenceBuilder<'db> {
             DefinitionKind::Assignment(assignment) => {
                 self.infer_assignment_definition(
                     assignment.target(),
+                    assignment.kind(),
                     assignment.assignment(),
                     definition,
                 );
@@ -957,19 +960,36 @@ impl<'db> TypeInferenceBuilder<'db> {
     fn infer_assignment_definition(
         &mut self,
         target: &ast::ExprName,
+        kind: AssignmentKind,
         assignment: &ast::StmtAssign,
         definition: Definition<'db>,
     ) {
         let expression = self.index.expression(assignment.value.as_ref());
         let result = infer_expression_types(self.db, expression);
         self.extend(result);
+
         let value_ty = self
             .types
             .expression_ty(assignment.value.scoped_ast_id(self.db, self.scope));
+
+        let target_ty = match (value_ty, kind) {
+            (Type::Tuple(tuple_type), AssignmentKind::Sequence(target_index)) => {
+                // TODO: Raise diagnostic for cases like:
+                // [a, b] = (1, 2, 3)
+                // [a, b, c] = (1, 2)
+                tuple_type
+                    .get(self.db, target_index)
+                    .copied()
+                    .unwrap_or(Type::Unknown)
+            }
+            _ => value_ty,
+        };
+
         self.types
             .expressions
-            .insert(target.scoped_ast_id(self.db, self.scope), value_ty);
-        self.types.definitions.insert(definition, value_ty);
+            .insert(target.scoped_ast_id(self.db, self.scope), target_ty);
+
+        self.types.definitions.insert(definition, target_ty);
     }
 
     fn infer_annotated_assignment_statement(&mut self, assignment: &ast::StmtAnnAssign) {
@@ -4055,6 +4075,22 @@ mod tests {
         );
 
         Ok(())
+    }
+
+    #[test]
+    fn unpacked_tuple_assignment() {
+        let mut db = setup_db();
+
+        db.write_dedented(
+            "/src/a.py",
+            "
+            x, y = 1, 2
+            ",
+        )
+        .unwrap();
+
+        assert_public_ty(&db, "/src/a.py", "x", "Literal[1]");
+        assert_public_ty(&db, "/src/a.py", "y", "Literal[2]");
     }
 
     #[test]

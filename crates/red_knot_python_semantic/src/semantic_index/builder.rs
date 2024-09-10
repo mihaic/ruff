@@ -27,7 +27,7 @@ use crate::semantic_index::SemanticIndex;
 use crate::Db;
 
 use super::constraint::{Constraint, PatternConstraint};
-use super::definition::{MatchPatternDefinitionNodeRef, WithItemDefinitionNodeRef};
+use super::definition::{AssignmentKind, MatchPatternDefinitionNodeRef, WithItemDefinitionNodeRef};
 
 pub(super) struct SemanticIndexBuilder<'db> {
     // Builder state
@@ -517,8 +517,17 @@ where
                 debug_assert!(self.current_assignment.is_none());
                 self.visit_expr(&node.value);
                 self.add_standalone_expression(&node.value);
-                self.current_assignment = Some(node.into());
                 for target in &node.targets {
+                    let kind = match target {
+                        ast::Expr::Name(_) => AssignmentKind::Name,
+                        ast::Expr::List(_) | ast::Expr::Tuple(_) => AssignmentKind::Sequence(0),
+                        ast::Expr::Starred(_) => AssignmentKind::Starred,
+                        ast::Expr::Attribute(_) => AssignmentKind::Attribute,
+                        ast::Expr::Subscript(_) => AssignmentKind::Subscript,
+                        // TODO: is this a good default for an error recovery case like `1 = 2`?
+                        _ => continue,
+                    };
+                    self.current_assignment = Some(CurrentAssignment::Assign { node, kind });
                     self.visit_expr(target);
                 }
                 self.current_assignment = None;
@@ -699,12 +708,13 @@ where
                 let symbol = self.add_or_update_symbol(id.clone(), flags);
                 if flags.contains(SymbolFlags::IS_DEFINED) {
                     match self.current_assignment {
-                        Some(CurrentAssignment::Assign(assignment)) => {
+                        Some(CurrentAssignment::Assign { node, kind }) => {
                             self.add_definition(
                                 symbol,
                                 AssignmentDefinitionNodeRef {
-                                    assignment,
+                                    assignment: node,
                                     target: name_node,
+                                    kind,
                                 },
                             );
                         }
@@ -851,6 +861,19 @@ where
                 self.visit_expr(key);
                 self.visit_expr(value);
             }
+            ast::Expr::Tuple(ast::ExprTuple { elts, ctx, .. }) => {
+                for (index, element) in elts.iter().enumerate() {
+                    if let Some(CurrentAssignment::Assign {
+                        kind: AssignmentKind::Sequence(target_index),
+                        ..
+                    }) = self.current_assignment.as_mut()
+                    {
+                        *target_index = index;
+                    }
+                    self.visit_expr(element);
+                }
+                self.visit_expr_context(ctx);
+            }
             _ => {
                 walk_expr(self, expr);
             }
@@ -957,7 +980,10 @@ where
 
 #[derive(Copy, Clone, Debug)]
 enum CurrentAssignment<'a> {
-    Assign(&'a ast::StmtAssign),
+    Assign {
+        node: &'a ast::StmtAssign,
+        kind: AssignmentKind,
+    },
     AnnAssign(&'a ast::StmtAnnAssign),
     AugAssign(&'a ast::StmtAugAssign),
     For(&'a ast::StmtFor),
@@ -967,12 +993,6 @@ enum CurrentAssignment<'a> {
         first: bool,
     },
     WithItem(&'a ast::WithItem),
-}
-
-impl<'a> From<&'a ast::StmtAssign> for CurrentAssignment<'a> {
-    fn from(value: &'a ast::StmtAssign) -> Self {
-        Self::Assign(value)
-    }
 }
 
 impl<'a> From<&'a ast::StmtAnnAssign> for CurrentAssignment<'a> {

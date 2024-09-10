@@ -147,6 +147,7 @@ pub(crate) struct ImportFromDefinitionNodeRef<'a> {
 pub(crate) struct AssignmentDefinitionNodeRef<'a> {
     pub(crate) assignment: &'a ast::StmtAssign,
     pub(crate) target: &'a ast::ExprName,
+    pub(crate) kind: AssignmentKind,
 }
 
 #[derive(Copy, Clone, Debug)]
@@ -203,12 +204,15 @@ impl DefinitionNodeRef<'_> {
             DefinitionNodeRef::NamedExpression(named) => {
                 DefinitionKind::NamedExpression(AstNodeRef::new(parsed, named))
             }
-            DefinitionNodeRef::Assignment(AssignmentDefinitionNodeRef { assignment, target }) => {
-                DefinitionKind::Assignment(AssignmentDefinitionKind {
-                    assignment: AstNodeRef::new(parsed.clone(), assignment),
-                    target: AstNodeRef::new(parsed, target),
-                })
-            }
+            DefinitionNodeRef::Assignment(AssignmentDefinitionNodeRef {
+                assignment,
+                target,
+                kind,
+            }) => DefinitionKind::Assignment(AssignmentDefinitionKind {
+                assignment: AstNodeRef::new(parsed.clone(), assignment),
+                target: AstNodeRef::new(parsed, target),
+                kind,
+            }),
             DefinitionNodeRef::AnnotatedAssignment(assign) => {
                 DefinitionKind::AnnotatedAssignment(AstNodeRef::new(parsed, assign))
             }
@@ -276,6 +280,7 @@ impl DefinitionNodeRef<'_> {
             Self::Assignment(AssignmentDefinitionNodeRef {
                 assignment: _,
                 target,
+                kind: _,
             }) => target.into(),
             Self::AnnotatedAssignment(node) => node.into(),
             Self::AugmentedAssignment(node) => node.into(),
@@ -381,6 +386,7 @@ impl ImportFromDefinitionKind {
 pub struct AssignmentDefinitionKind {
     assignment: AstNodeRef<ast::StmtAssign>,
     target: AstNodeRef<ast::ExprName>,
+    kind: AssignmentKind,
 }
 
 impl AssignmentDefinitionKind {
@@ -391,6 +397,26 @@ impl AssignmentDefinitionKind {
     pub(crate) fn target(&self) -> &ast::ExprName {
         self.target.node()
     }
+
+    pub(crate) fn kind(&self) -> AssignmentKind {
+        self.kind
+    }
+}
+
+/// The kind of assignment target expression.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum AssignmentKind {
+    /// An attribute expression e.g., `x.y = 1`.
+    Attribute,
+    /// A subscript expression e.g., `x[0] = 1`.
+    Subscript,
+    /// A starred expression e.g., `*x = 1`.
+    Starred,
+    /// A name expression e.g., `x = 1`.
+    Name,
+    /// A list or tuple expression which corresponds to an unpacking assignment e.g., `(x, y) = (1, 2)`.
+    /// The containing value is the position of the target in the assignment.
+    Sequence(usize),
 }
 
 #[derive(Clone, Debug)]

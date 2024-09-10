@@ -210,6 +210,13 @@ impl<'db> Type<'db> {
         matches!(self, Type::Never)
     }
 
+    pub const fn as_tuple_type(&self) -> Option<&TupleType<'db>> {
+        match self {
+            Type::Tuple(tuple_type) => Some(tuple_type),
+            _ => None,
+        }
+    }
+
     pub const fn into_class_type(self) -> Option<ClassType<'db>> {
         match self {
             Type::Class(class_type) => Some(class_type),
@@ -671,4 +678,10 @@ pub struct BytesLiteralType<'db> {
 pub struct TupleType<'db> {
     #[return_ref]
     elements: Box<[Type<'db>]>,
+}
+
+impl<'db> TupleType<'db> {
+    pub fn get(&self, db: &'db dyn Db, index: usize) -> Option<&Type<'db>> {
+        self.elements(db).get(index)
+    }
 }
