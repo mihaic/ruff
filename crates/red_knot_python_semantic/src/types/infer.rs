@@ -5683,8 +5683,8 @@ mod tests {
             ",
         )?;
 
-        assert_public_ty(&db, "src/a.py", "e", "NameError");
-        assert_public_ty(&db, "src/a.py", "f", "error");
+        assert_public_ty(&db, "src/a.py", "e", "Unbound | NameError");
+        assert_public_ty(&db, "src/a.py", "f", "Unbound | error");
         assert_file_diagnostics(&db, "src/a.py", &[]);
 
         Ok(())
@@ -5712,7 +5712,7 @@ mod tests {
             &["Cannot resolve import `nonexistent_module`"],
         );
         assert_public_ty(&db, "src/a.py", "foo", "Unknown");
-        assert_public_ty(&db, "src/a.py", "e", "Unknown");
+        assert_public_ty(&db, "src/a.py", "e", "Unbound | Unknown");
 
         Ok(())
     }
@@ -5740,9 +5740,9 @@ mod tests {
         // For these TODOs we need support for `tuple` types:
 
         // TODO: Should be `RuntimeError | OSError` --Alex
-        assert_public_ty(&db, "src/a.py", "e", "@Todo");
+        assert_public_ty(&db, "src/a.py", "e", "Unbound | @Todo");
         // TODO: Should be `AttributeError | TypeError` --Alex
-        assert_public_ty(&db, "src/a.py", "e", "@Todo");
+        assert_public_ty(&db, "src/a.py", "e", "Unbound | @Todo");
 
         Ok(())
     }
@@ -5762,7 +5762,7 @@ mod tests {
         )?;
 
         assert_file_diagnostics(&db, "src/a.py", &[]);
-        assert_public_ty(&db, "src/a.py", "e", "Unknown");
+        assert_public_ty(&db, "src/a.py", "e", "Unbound | Unknown");
 
         Ok(())
     }
@@ -5786,7 +5786,12 @@ mod tests {
         // TODO: once we support `sys.version_info` branches,
         // we can set `--target-version=py311` in this test
         // and the inferred type will just be `BaseExceptionGroup` --Alex
-        assert_public_ty(&db, "src/a.py", "e", "Unknown | BaseExceptionGroup");
+        assert_public_ty(
+            &db,
+            "src/a.py",
+            "e",
+            "Unbound | Unknown | BaseExceptionGroup",
+        );
 
         Ok(())
     }
@@ -5812,7 +5817,12 @@ mod tests {
         // and the inferred type will just be `BaseExceptionGroup` --Alex
         //
         // TODO more precise would be `ExceptionGroup[OSError]` --Alex
-        assert_public_ty(&db, "src/a.py", "e", "Unknown | BaseExceptionGroup");
+        assert_public_ty(
+            &db,
+            "src/a.py",
+            "e",
+            "Unbound | Unknown | BaseExceptionGroup",
+        );
 
         Ok(())
     }
@@ -5838,7 +5848,12 @@ mod tests {
         // and the inferred type will just be `BaseExceptionGroup` --Alex
         //
         // TODO more precise would be `ExceptionGroup[TypeError | AttributeError]` --Alex
-        assert_public_ty(&db, "src/a.py", "e", "Unknown | BaseExceptionGroup");
+        assert_public_ty(
+            &db,
+            "src/a.py",
+            "e",
+            "Unbound | Unknown | BaseExceptionGroup",
+        );
 
         Ok(())
     }
