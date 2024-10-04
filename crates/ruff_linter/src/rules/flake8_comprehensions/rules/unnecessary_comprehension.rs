@@ -12,9 +12,8 @@ use crate::rules::flake8_comprehensions::fixes;
 /// Checks for unnecessary `dict`, `list`, and `set` comprehension.
 ///
 /// ## Why is this bad?
-/// It's unnecessary to use a `dict`/`list`/`set` comprehension to build a
-/// data structure if the elements are unchanged. Wrap the iterable with
-/// `dict()`, `list()`, or `set()` instead.
+/// It's unnecessary to use a `dict`/`list`/`set` comprehension to build a data structure if the
+/// elements are unchanged. Wrap the iterable with `dict()`, `list()`, or `set()` instead.
 ///
 /// ## Examples
 /// ```python
@@ -30,10 +29,23 @@ use crate::rules::flake8_comprehensions::fixes;
 /// set(iterable)
 /// ```
 ///
+/// ## Known problems
+///
+/// When the dictionary key is a tuple, e.g.:
+///
+/// ```python
+/// d1 = {(1, 2): 3, (3, 4): 5}
+/// d2 = {x: y for x, y in d1}
+/// ```
+///
+/// The tuple key is unpackaged into `x` and `y` instead of the key and values. This means that
+/// the suggested fix of `d2 = dict(d1)` would result in different runtime behavior. Ruff
+/// cannot yet detect the tuple key.
+///
 /// ## Fix safety
-/// This rule's fix is marked as unsafe, as it may occasionally drop comments
-/// when rewriting the comprehension. In most cases, though, comments will be
-/// preserved.
+/// Due to the known problem with tuple keys, this fix is marked as unsafe.
+///
+/// Additionally, this fix may drop comments when rewriting the comprehension.
 #[violation]
 pub struct UnnecessaryComprehension {
     obj_type: String,
